@@ -36,10 +36,10 @@ async def get_sirene_data(siret: str):
         access_token = token_response.json().get("access_token")
 
         # 2. Fetch SIRET data
-        api_response = await client.get(
-            f"https://api.insee.fr/entreprises/sirene/V3/siret/{siret}",
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
+api_response = await client.get(
+    f"https://api.insee.fr/entreprises/sirene/V3/siret/{siret}?champs=uniteLegale",
+    headers={"Authorization": f"Bearer {access_token}"}
+)
 
         if api_response.status_code != 200:
             # DEBUG: log full response text to Render logs
