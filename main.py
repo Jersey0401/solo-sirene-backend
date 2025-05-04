@@ -2,13 +2,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Allow your Android app (or any client) to access this API
+# CORS config: replace with actual allowed origins for security
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost", "https://your-android-app.com"],  # ← specify exact origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -22,33 +27,41 @@ async def get_sirene_data(siret: str):
     if not client_id or not client_secret:
         raise HTTPException(status_code=500, detail="API credentials missing")
 
-    async with httpx.AsyncClient() as client:
-        # Step 1: Get access token — use the correct endpoint
-        token_response = await client.post(
-            "https://api.insee.fr/token",
-            data={"grant_type": "client_credentials"},
-            auth=httpx.BasicAuth(client_id, client_secret)
-        )
-        if token_response.status_code != 200:
-            raise HTTPException(status_code=token_response.status_code, detail="Token fetch failed")
+    try:
+        async with httpx.AsyncClient() as client:
+            # Step 1: Get access token
+            token_resp = await client.post(
+                "https://api.insee.fr/token",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data={"grant_type": "client_credentials"},
+                auth=httpx.BasicAuth(client_id, client_secret)
+            )
 
-        access_token = token_response.json().get("access_token")
+            if token_resp.status_code != 200:
+                logger.error("Token fetch failed: %s", token_resp.text)
+                raise HTTPException(status_code=token_resp.status_code, detail="Token fetch failed")
 
-        # Step 2: Use token to query the SIRET
-        api_response = await client.get(
-            f"https://api.insee.fr/entreprises/sirene/V3/siret/{siret}?champs=uniteLegale",
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
-        if api_response.status_code != 200:
-            # Log the raw INSEE error for debugging
-            print("INSEE error:", api_response.status_code, api_response.text)
-            raise HTTPException(status_code=api_response.status_code, detail="Sirene lookup failed")
+            access_token = token_resp.json().get("access_token")
+            if not access_token:
+                raise HTTPException(status_code=500, detail="No access token in response")
 
-        data = api_response.json()
-        etab = data.get("etablissement", {}).get("uniteLegale", {})
+            # Step 2: Query the SIRET
+            insee_resp = await client.get(
+                f"https://api.insee.fr/entreprises/sirene/V3/siret/{siret}?champs=uniteLegale",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
 
-        return {
-            "nafCode": etab.get("activitePrincipaleUniteLegale", ""),
-            "nafLabel": etab.get("nomenclatureActivitePrincipaleUniteLegale", ""),
-            "name": etab.get("denominationUniteLegale", "")
-        }
+            if insee_resp.status_code != 200:
+                logger.error("INSEE API error: %s", insee_resp.text)
+                raise HTTPException(status_code=insee_resp.status_code, detail="Sirene lookup failed")
+
+            etab = insee_resp.json().get("etablissement", {}).get("uniteLegale", {})
+
+            return {
+                "nafCode": etab.get("activitePrincipale", ""),
+                "nafLabel": etab.get("nomenclatureActivitePrincipale", ""),
+                "name": etab.get("denominationUniteLegale", "")
+            }
+    except httpx.HTTPError as e:
+        logger.exception("HTTP client error")
+        raise HTTPException(status_code=500, detail="External API call failed")
