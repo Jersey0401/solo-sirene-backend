@@ -24,11 +24,16 @@ async def get_sirene_data(siret: str):
 
     async with httpx.AsyncClient() as client:
         # Step 1: Get access token
-        token_response = await client.post(
-            "https://api.insee.fr/token",
-            data={"grant_type": "client_credentials"},
-            auth=httpx.BasicAuth(client_id, client_secret)
-        )
+# ↑ NEW – the OAuth2 token endpoint
+token_response = await client.post(
+    "https://api.insee.fr/oauth2/token",
+    headers={"Content-Type": "application/x-www-form-urlencoded"},
+    data={
+      "grant_type": "client_credentials",
+      "scope": "https://api.insee.fr/entreprises/sirene/V3"
+    },
+    auth=httpx.BasicAuth(client_id, client_secret)
+)
 
         if token_response.status_code != 200:
             raise HTTPException(status_code=token_response.status_code, detail="Token fetch failed")
