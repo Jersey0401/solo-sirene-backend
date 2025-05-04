@@ -23,17 +23,16 @@ async def get_sirene_data(siret: str):
         raise HTTPException(status_code=500, detail="API credentials missing")
 
     async with httpx.AsyncClient() as client:
-        # Step 1: Get access token
-# ↑ NEW – the OAuth2 token endpoint
-token_response = await client.post(
-    "https://api.insee.fr/oauth2/token",
-    headers={"Content-Type": "application/x-www-form-urlencoded"},
-    data={
-      "grant_type": "client_credentials",
-      "scope": "https://api.insee.fr/entreprises/sirene/V3"
-    },
-    auth=httpx.BasicAuth(client_id, client_secret)
-)
+        # Step 1: Get access token (OAuth2)
+        token_response = await client.post(
+            "https://api.insee.fr/oauth2/token",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "grant_type": "client_credentials",
+                "scope": "https://api.insee.fr/entreprises/sirene/V3"
+            },
+            auth=httpx.BasicAuth(client_id, client_secret)
+        )
 
         if token_response.status_code != 200:
             raise HTTPException(status_code=token_response.status_code, detail="Token fetch failed")
@@ -54,7 +53,7 @@ token_response = await client.post(
         etab = data.get("etablissement", {}).get("uniteLegale", {})
 
         return {
-            "nafCode": etab.get("activitePrincipale", ""),
-            "nafLabel": etab.get("nomenclatureActivitePrincipale", ""),
+            "nafCode": etab.get("activitePrincipaleUniteLegale", ""),
+            "nafLabel": etab.get("nomenclatureActivitePrincipaleUniteLegale", ""),
             "name": etab.get("denominationUniteLegale", "")
         }
