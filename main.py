@@ -5,7 +5,7 @@ import os
 
 app = FastAPI()
 
-# Allow Android app to access this API
+# Allow your Android app (or any client) to access this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,17 +23,12 @@ async def get_sirene_data(siret: str):
         raise HTTPException(status_code=500, detail="API credentials missing")
 
     async with httpx.AsyncClient() as client:
-        # Step 1: Get access token (OAuth2)
+        # Step 1: Get access token — use the correct endpoint
         token_response = await client.post(
-            "https://api.insee.fr/oauth2/token",
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            data={
-                "grant_type": "client_credentials",
-                "scope": "https://api.insee.fr/entreprises/sirene/V3"
-            },
+            "https://api.insee.fr/token",
+            data={"grant_type": "client_credentials"},
             auth=httpx.BasicAuth(client_id, client_secret)
         )
-
         if token_response.status_code != 200:
             raise HTTPException(status_code=token_response.status_code, detail="Token fetch failed")
 
@@ -44,8 +39,8 @@ async def get_sirene_data(siret: str):
             f"https://api.insee.fr/entreprises/sirene/V3/siret/{siret}?champs=uniteLegale",
             headers={"Authorization": f"Bearer {access_token}"}
         )
-
         if api_response.status_code != 200:
+            # Log the raw INSEE error for debugging
             print("INSEE error:", api_response.status_code, api_response.text)
             raise HTTPException(status_code=api_response.status_code, detail="Sirene lookup failed")
 
