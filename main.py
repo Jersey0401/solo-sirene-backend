@@ -5,7 +5,7 @@ import os
 
 app = FastAPI()
 
-# Allow Android app to access this API
+# Allow Android app to access this API (WARNING: use specific origins in production)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,23 +24,24 @@ async def get_sirene_data(siret: str):
 
     async with httpx.AsyncClient() as client:
         # Step 1: Get access token
-# ↑ NEW – the OAuth2 token endpoint
-token_response = await client.post(
-    "https://api.insee.fr/oauth2/token",
-    headers={"Content-Type": "application/x-www-form-urlencoded"},
-    data={
-      "grant_type": "client_credentials",
-      "scope": "https://api.insee.fr/entreprises/sirene/V3"
-    },
-    auth=httpx.BasicAuth(client_id, client_secret)
-)
+        token_response = await client.post(
+            "https://api.insee.fr/oauth2/token",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "grant_type": "client_credentials",
+                "scope": "https://api.insee.fr/entreprises/sirene/V3"
+            },
+            auth=httpx.BasicAuth(client_id, client_secret)
+        )
 
         if token_response.status_code != 200:
             raise HTTPException(status_code=token_response.status_code, detail="Token fetch failed")
 
         access_token = token_response.json().get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=500, detail="No access token in response")
 
-        # Step 2: Use token to query the SIRET
+        # Step 2: Use token to query the SIRET (V3.11)
         api_response = await client.get(
             f"https://api.insee.fr/entreprises/sirene/V3.11/siret/{siret}?champs=uniteLegale",
             headers={"Authorization": f"Bearer {access_token}"}
