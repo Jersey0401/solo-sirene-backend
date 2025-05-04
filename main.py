@@ -5,10 +5,10 @@ import os
 
 app = FastAPI()
 
-# Allow calls from your Android app
+# Allow calls from your Android app (set specific origins later if needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace with your app’s domain if needed
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -22,33 +22,33 @@ async def get_sirene_data(siret: str):
     if not client_id or not client_secret:
         raise HTTPException(status_code=500, detail="API credentials missing")
 
-    # Step 1: Get token
-    # Step 1: Get token
-    token_response = await httpx.post(
-        "https://api.insee.fr/token",
-        data={"grant_type": "client_credentials"},
-        auth=httpx.BasicAuth(client_id, client_secret)
-    )
+    # Step 1: Get OAuth2 token from INSEE
+    async with httpx.AsyncClient() as client:
+        token_response = await client.post(
+            "https://api.insee.fr/token",
+            data={"grant_type": "client_credentials"},
+            auth=httpx.BasicAuth(client_id, client_secret)
+        )
 
-    if token_response.status_code != 200:
-        raise HTTPException(status_code=token_response.status_code, detail="Token fetch failed")
+        if token_response.status_code != 200:
+            raise HTTPException(status_code=token_response.status_code, detail="Token fetch failed")
 
-    access_token = token_response.json().get("access_token")
+        access_token = token_response.json().get("access_token")
 
-    # Step 2: Call Sirene API
-    api_response = await httpx.get(
-        f"https://api.insee.fr/entreprises/sirene/V3/siret/{siret}",
-        headers={"Authorization": f"Bearer {access_token}"}
-    )
+        # Step 2: Use token to query the SIRET
+        api_response = await client.get(
+            f"https://api.insee.fr/entreprises/sirene/V3/siret/{siret}",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
 
-    if api_response.status_code != 200:
-        raise HTTPException(status_code=api_response.status_code, detail="Sirene lookup failed")
+        if api_response.status_code != 200:
+            raise HTTPException(status_code=api_response.status_code, detail="Sirene lookup failed")
 
-    data = api_response.json()
-    etab = data.get("etablissement", {}).get("uniteLegale", {})
+        data = api_response.json()
+        etab = data.get("etablissement", {}).get("uniteLegale", {})
 
-    return {
-        "nafCode": etab.get("activitePrincipale", ""),
-        "nafLabel": etab.get("nomenclatureActivitePrincipale", ""),
-        "name": etab.get("denominationUniteLegale", "")
-    }
+        return {
+            "nafCode": etab.get("activitePrincipale", ""),
+            "nafLabel": etab.get("nomenclatureActivitePrincipale", ""),
+            "name": etab.get("denominationUniteLegale", "")
+        }
