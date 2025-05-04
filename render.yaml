@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: solo-sirene-api
+    runtime: python
+    buildCommand: ""
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: INSEE_CLIENT_ID
+        sync: false
+      - key: INSEE_CLIENT_SECRET
+        sync: false
