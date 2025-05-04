@@ -23,11 +23,12 @@ async def get_sirene_data(siret: str):
         raise HTTPException(status_code=500, detail="API credentials missing")
 
     # Step 1: Get token
-token_response = await httpx.post(
-    "https://api.insee.fr/token",
-    data={"grant_type": "client_credentials"},
-    auth=httpx.BasicAuth(client_id, client_secret)
-)
+    # Step 1: Get token
+    token_response = await httpx.post(
+        "https://api.insee.fr/token",
+        data={"grant_type": "client_credentials"},
+        auth=httpx.BasicAuth(client_id, client_secret)
+    )
 
     if token_response.status_code != 200:
         raise HTTPException(status_code=token_response.status_code, detail="Token fetch failed")
